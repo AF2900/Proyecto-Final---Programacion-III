@@ -13,6 +13,7 @@ defmodule Main do
       1. Crear sorteo
       2. Listar sorteos
       3. Ver detalle de sorteo
+      4. Comprar billete
       0. Salir
       =========================
       Ingrese una opción:
@@ -34,6 +35,11 @@ defmodule Main do
 
   def ejecutar_opcion(3) do
     ServidorCentral.ver_detalle_sorteo()
+    main()
+  end
+
+  def ejecutar_opcion(4) do
+    ServidorCentral.comprar_billete()
     main()
   end
 

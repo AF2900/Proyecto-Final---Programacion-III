@@ -1,5 +1,6 @@
 Code.require_file("../modelos/sorteo.ex", __DIR__)
 Code.require_file("servidor_sorteo.ex", __DIR__)
+Code.require_file("../modelos/cliente.ex", __DIR__)
 
 defmodule ServidorCentral do
   @ruta "datos/sorteos.json"
@@ -82,6 +83,40 @@ defmodule ServidorCentral do
     File.write!(@ruta, Jason.encode!(nueva_lista, pretty: true))
   end
 
+  def comprar_billete do
+    case File.read(@ruta) do
+      {:ok, contenido} ->
+        lista = Jason.decode!(contenido)
+
+        if lista == [] do
+          "No hay sorteos"
+          |> Util.mostrar_mensaje()
+        else
+          lista
+          |> Enum.with_index()
+          |> Enum.each(fn {s, i} ->
+            IO.puts("#{i + 1}. #{s["data"]["nombre"]}")
+          end)
+
+          opcion =
+            "Seleccione sorteo: "
+            |> Util.ingresar(:entero)
+
+          seleccionado = Enum.at(lista, opcion - 1)
+          sorteo = seleccionado["data"]
+
+          cliente = Cliente.ingresar()
+
+          pid = spawn(fn -> ServidorSorteo.iniciar(sorteo) end)
+
+          intentar_compra(pid, cliente)
+        end
+
+      _ ->
+        Util.mostrar_error("Error")
+    end
+  end
+
   def ver_detalle_sorteo do
     case File.read(@ruta) do
       {:ok, contenido} ->
@@ -115,6 +150,26 @@ defmodule ServidorCentral do
       _ ->
         "Error al leer datos"
         |> Util.mostrar_error()
+    end
+  end
+
+  defp intentar_compra(pid, cliente) do
+    numero =
+      "Ingrese número de billete: "
+      |> Util.ingresar(:entero)
+
+    send(pid, {:comprar, cliente, numero, self()})
+
+    receive do
+      {:ok, msg} ->
+        IO.puts(msg)
+
+      {:error, msg} ->
+        IO.puts(msg)
+        intentar_compra(pid, cliente)
+    after
+      2000 ->
+        IO.puts("Sin respuesta")
     end
   end
 end
