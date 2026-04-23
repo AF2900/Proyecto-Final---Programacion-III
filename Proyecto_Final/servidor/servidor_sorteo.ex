@@ -20,24 +20,24 @@ defmodule ServidorSorteo do
   end
 
   defp vender_billete(sorteo, cliente, numero) do
-    billetes = sorteo["billetes"]
+    billetes = sorteo.billetes
 
-    case Enum.find(billetes, fn b -> b["numero"] == numero end) do
+    case Enum.find(billetes, fn b -> b.numero == numero end) do
       nil ->
         {sorteo, {:error, "Número inválido"}}
 
-      %{"vendido" => true} ->
+      %{vendido: true} ->
         {sorteo, {:error, "Billete ya vendido"}}
 
       billete ->
-        nuevo_billete = Map.put(billete, "vendido", true)
+        nuevo_billete = %{billete | vendido: true}
 
         nuevos_billetes =
           Enum.map(billetes, fn b ->
-            if b["numero"] == numero, do: nuevo_billete, else: b
+            if b.numero == numero, do: nuevo_billete, else: b
           end)
 
-        nuevo_sorteo = Map.put(sorteo, "billetes", nuevos_billetes)
+        nuevo_sorteo = %{sorteo | billetes: nuevos_billetes}
 
         {nuevo_sorteo, {:ok, cliente.nombre <> " compró el billete #{numero}"}}
     end
