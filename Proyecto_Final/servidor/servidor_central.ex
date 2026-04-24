@@ -48,20 +48,20 @@ defmodule ServidorCentral do
   def listar_sorteos do
     case File.read(@ruta) do
       {:ok, contenido} ->
-        lista = Jason.decode!(contenido)
+        lista = Jason.decode!(contenido, keys: :atoms)
 
         if lista == [] do
           "No hay sorteos registrados"
           |> Util.mostrar_mensaje()
         else
           Enum.each(lista, fn s ->
-            sorteo = s["data"]
+            sorteo = s.data
 
             IO.puts("---------------------------")
-            IO.puts("Nombre: #{sorteo["nombre"]}")
-            IO.puts("Fecha: #{sorteo["fecha"]}")
-            IO.puts("Valor: #{sorteo["valor_billete"]}")
-            IO.puts("PID: #{s["pid"]}")
+            IO.puts("Nombre: #{sorteo.nombre}")
+            IO.puts("Fecha: #{sorteo.fecha}")
+            IO.puts("Valor: #{sorteo.valor_billete}")
+            IO.puts("PID: #{s.pid}")
           end)
         end
 
@@ -74,7 +74,7 @@ defmodule ServidorCentral do
   defp guardar_sorteo(sorteo) do
     lista =
       case File.read(@ruta) do
-        {:ok, contenido} -> Jason.decode!(contenido)
+        {:ok, contenido} -> Jason.decode!(contenido, keys: :atoms)
         _ -> []
       end
 
@@ -86,7 +86,7 @@ defmodule ServidorCentral do
   def comprar_billete do
     case File.read(@ruta) do
       {:ok, contenido} ->
-        lista = Jason.decode!(contenido)
+        lista = Jason.decode!(contenido, keys: :atoms)
 
         if lista == [] do
           "No hay sorteos"
@@ -95,7 +95,7 @@ defmodule ServidorCentral do
           lista
           |> Enum.with_index()
           |> Enum.each(fn {s, i} ->
-            IO.puts("#{i + 1}. #{s["data"]["nombre"]}")
+            IO.puts("#{i + 1}. #{s.data.nombre}")
           end)
 
           opcion =
@@ -103,7 +103,7 @@ defmodule ServidorCentral do
             |> Util.ingresar(:entero)
 
           seleccionado = Enum.at(lista, opcion - 1)
-          sorteo = seleccionado["data"]
+          sorteo = seleccionado.data
 
           cliente = Cliente.ingresar()
 
@@ -120,7 +120,7 @@ defmodule ServidorCentral do
   def ver_detalle_sorteo do
     case File.read(@ruta) do
       {:ok, contenido} ->
-        lista = Jason.decode!(contenido)
+        lista = Jason.decode!(contenido, keys: :atoms)
 
         if lista == [] do
           "No hay sorteos registrados"
@@ -129,8 +129,8 @@ defmodule ServidorCentral do
           lista
           |> Enum.with_index()
           |> Enum.each(fn {s, i} ->
-            sorteo = s["data"]
-            IO.puts("#{i + 1}. #{sorteo["nombre"]}")
+            sorteo = s.data
+            IO.puts("#{i + 1}. #{sorteo.nombre}")
           end)
 
           opcion =
@@ -139,12 +139,12 @@ defmodule ServidorCentral do
 
           seleccionado = Enum.at(lista, opcion - 1)
 
-          sorteo = seleccionado["data"]
+          sorteo = seleccionado.data
 
           IO.puts("----- DETALLE DEL SORTEO -----")
-          IO.puts("Nombre: #{sorteo["nombre"]}")
-          IO.puts("Fecha: #{sorteo["fecha"]}")
-          IO.puts("Valor: #{sorteo["valor_billete"]}")
+          IO.puts("Nombre: #{sorteo.nombre}")
+          IO.puts("Fecha: #{sorteo.fecha}")
+          IO.puts("Valor: #{sorteo.valor_billete}")
         end
 
       _ ->
