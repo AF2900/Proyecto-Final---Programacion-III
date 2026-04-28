@@ -5,13 +5,20 @@ defmodule ServidorSorteo do
 
   defp loop(sorteo) do
     receive do
-      {:comprar, cliente, numero, pid_cliente} ->
+      {:comprar, cliente, numero, pid_cliente, pid_central} ->
         {nuevo_sorteo, respuesta} = vender_billete(sorteo, cliente, numero)
+
         send(pid_cliente, respuesta)
+        send(pid_central, {:actualizar_sorteo, nuevo_sorteo})
+
         loop(nuevo_sorteo)
 
       {:obtener_info, pid_cliente} ->
         send(pid_cliente, {:respuesta, sorteo})
+        loop(sorteo)
+
+      {:obtener_apuestas, pid_cliente} ->
+        send(pid_cliente, {:apuestas, Map.get(sorteo, :apuestas, [])})
         loop(sorteo)
 
       _ ->
@@ -37,7 +44,21 @@ defmodule ServidorSorteo do
             if b.numero == numero, do: nuevo_billete, else: b
           end)
 
-        nuevo_sorteo = %{sorteo | billetes: nuevos_billetes}
+        nueva_apuesta = %{
+          cliente: %{
+            nombre: cliente.nombre,
+            edad: cliente.edad
+          },
+          numero: numero
+        }
+
+        nuevas_apuestas = Map.get(sorteo, :apuestas, []) ++ [nueva_apuesta]
+
+        nuevo_sorteo = %{
+          sorteo
+          | billetes: nuevos_billetes,
+            apuestas: nuevas_apuestas
+        }
 
         {nuevo_sorteo, {:ok, cliente.nombre <> " compró el billete #{numero}"}}
     end

@@ -103,10 +103,10 @@ defmodule ServidorCentral do
             |> Util.ingresar(:entero)
 
           seleccionado = Enum.at(lista, opcion - 1)
-          sorteo = seleccionado.data
 
           cliente = Cliente.ingresar()
 
+          sorteo = seleccionado.data
           pid = spawn(fn -> ServidorSorteo.iniciar(sorteo) end)
 
           intentar_compra(pid, cliente)
@@ -158,11 +158,18 @@ defmodule ServidorCentral do
       "Ingrese número de billete: "
       |> Util.ingresar(:entero)
 
-    send(pid, {:comprar, cliente, numero, self()})
+    send(pid, {:comprar, cliente, numero, self(), self()})
 
     receive do
       {:ok, msg} ->
         IO.puts(msg)
+
+        receive do
+          {:actualizar_sorteo, nuevo_sorteo} ->
+            actualizar_en_json(nuevo_sorteo)
+        after
+          1000 -> :ok
+        end
 
       {:error, msg} ->
         IO.puts(msg)
@@ -171,5 +178,72 @@ defmodule ServidorCentral do
       2000 ->
         IO.puts("Sin respuesta")
     end
+  end
+
+  def ver_apuestas do
+    case File.read(@ruta) do
+      {:ok, contenido} ->
+        lista = Jason.decode!(contenido, keys: :atoms)
+
+        if lista == [] do
+          "No hay sorteos"
+          |> Util.mostrar_mensaje()
+        else
+          lista
+          |> Enum.with_index()
+          |> Enum.each(fn {s, i} ->
+            IO.puts("#{i + 1}. #{s.data.nombre}")
+          end)
+
+          opcion =
+            "Seleccione sorteo: "
+            |> Util.ingresar(:entero)
+
+          seleccionado = Enum.at(lista, opcion - 1)
+
+          sorteo = seleccionado.data
+          pid = spawn(fn -> ServidorSorteo.iniciar(sorteo) end)
+
+          send(pid, {:obtener_apuestas, self()})
+
+          receive do
+            {:apuestas, apuestas} ->
+              if apuestas == [] do
+                IO.puts("No hay apuestas registradas")
+              else
+                apuestas
+                |> Enum.with_index()
+                |> Enum.each(fn {a, i} ->
+                  IO.puts("#{i + 1}. #{a.cliente.nombre} compró el billete #{a.numero}")
+                end)
+              end
+          after
+            2000 ->
+              IO.puts("No hubo respuesta del proceso")
+          end
+        end
+
+      _ ->
+        Util.mostrar_error("Error")
+    end
+  end
+
+  defp actualizar_en_json(nuevo_sorteo) do
+    lista =
+      case File.read(@ruta) do
+        {:ok, contenido} -> Jason.decode!(contenido, keys: :atoms)
+        _ -> []
+      end
+
+    nueva_lista =
+      Enum.map(lista, fn s ->
+        if s.data.nombre == nuevo_sorteo.nombre do
+          %{s | data: nuevo_sorteo}
+        else
+          s
+        end
+      end)
+
+    File.write!(@ruta, Jason.encode!(nueva_lista, pretty: true))
   end
 end
