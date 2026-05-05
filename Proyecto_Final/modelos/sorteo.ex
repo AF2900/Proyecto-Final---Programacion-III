@@ -7,7 +7,8 @@ defmodule Sorteo do
       billetes: generar_billetes(billetes),
       premios: [],
       jugado: false,
-      apuestas: []
+      apuestas: [],
+      ganador: nil
     }
   end
 

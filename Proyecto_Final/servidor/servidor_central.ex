@@ -145,6 +145,13 @@ defmodule ServidorCentral do
           IO.puts("Nombre: #{sorteo.nombre}")
           IO.puts("Fecha: #{sorteo.fecha}")
           IO.puts("Valor: #{sorteo.valor_billete}")
+
+          if sorteo.jugado do
+            IO.puts("Estado: FINALIZADO")
+            IO.puts("Número ganador: #{sorteo.ganador}")
+          else
+            IO.puts("Estado: ACTIVO")
+          end
         end
 
       _ ->
@@ -245,5 +252,54 @@ defmodule ServidorCentral do
       end)
 
     File.write!(@ruta, Jason.encode!(nueva_lista, pretty: true))
+  end
+
+  def realizar_sorteo do
+    case File.read(@ruta) do
+      {:ok, contenido} ->
+        lista = Jason.decode!(contenido, keys: :atoms)
+
+        if lista == [] do
+          Util.mostrar_mensaje("No hay sorteos")
+        else
+          lista
+          |> Enum.with_index()
+          |> Enum.each(fn {s, i} ->
+            IO.puts("#{i + 1}. #{s.data.nombre}")
+          end)
+
+          opcion =
+            "Seleccione sorteo: "
+            |> Util.ingresar(:entero)
+
+          seleccionado = Enum.at(lista, opcion - 1)
+
+          sorteo = seleccionado.data
+          pid = spawn(fn -> ServidorSorteo.iniciar(sorteo) end)
+
+          send(pid, {:realizar_sorteo, self(), self()})
+
+          receive do
+            {:ok, msg} ->
+              IO.puts(msg)
+
+              receive do
+                {:actualizar_sorteo, nuevo_sorteo} ->
+                  actualizar_en_json(nuevo_sorteo)
+              after
+                1000 -> :ok
+              end
+
+            {:error, msg} ->
+              IO.puts(msg)
+          after
+            2000 ->
+              IO.puts("Sin respuesta del proceso")
+          end
+        end
+
+      _ ->
+        Util.mostrar_error("Error")
+    end
   end
 end

@@ -17,3 +17,6 @@ defmodule Cliente do
     crear(nombre, edad)
   end
 end
+
+require Protocol
+Protocol.derive(Jason.Encoder, Cliente)

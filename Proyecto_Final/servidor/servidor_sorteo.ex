@@ -21,46 +21,88 @@ defmodule ServidorSorteo do
         send(pid_cliente, {:apuestas, Map.get(sorteo, :apuestas, [])})
         loop(sorteo)
 
+      {:realizar_sorteo, pid_cliente, pid_central} ->
+        {nuevo_sorteo, resultado} = realizar_sorteo(sorteo)
+
+        send(pid_cliente, resultado)
+        send(pid_central, {:actualizar_sorteo, nuevo_sorteo})
+
+        loop(nuevo_sorteo)
+
       _ ->
         loop(sorteo)
     end
   end
 
   defp vender_billete(sorteo, cliente, numero) do
-    billetes = sorteo.billetes
+    if sorteo.jugado do
+      {sorteo, {:error, "El sorteo ya fue realizado"}}
+    else
+      billetes = sorteo.billetes
 
-    case Enum.find(billetes, fn b -> b.numero == numero end) do
-      nil ->
-        {sorteo, {:error, "Número inválido"}}
+      case Enum.find(billetes, fn b -> b.numero == numero end) do
+        nil ->
+          {sorteo, {:error, "Número inválido"}}
 
-      %{vendido: true} ->
-        {sorteo, {:error, "Billete ya vendido"}}
+        %{vendido: true} ->
+          {sorteo, {:error, "Billete ya vendido"}}
 
-      billete ->
-        nuevo_billete = %{billete | vendido: true}
+        billete ->
+          nuevo_billete = %{billete | vendido: true}
 
-        nuevos_billetes =
-          Enum.map(billetes, fn b ->
-            if b.numero == numero, do: nuevo_billete, else: b
-          end)
+          nuevos_billetes =
+            Enum.map(billetes, fn b ->
+              if b.numero == numero, do: nuevo_billete, else: b
+            end)
 
-        nueva_apuesta = %{
-          cliente: %{
-            nombre: cliente.nombre,
-            edad: cliente.edad
-          },
-          numero: numero
-        }
+          nueva_apuesta = %{
+            cliente: cliente,
+            numero: numero
+          }
 
-        nuevas_apuestas = Map.get(sorteo, :apuestas, []) ++ [nueva_apuesta]
+          nuevas_apuestas = Map.get(sorteo, :apuestas, []) ++ [nueva_apuesta]
+
+          nuevo_sorteo = %{
+            sorteo
+            | billetes: nuevos_billetes,
+              apuestas: nuevas_apuestas
+          }
+
+          {nuevo_sorteo, {:ok, cliente.nombre <> " compró el billete #{numero}"}}
+      end
+    end
+  end
+
+  defp realizar_sorteo(sorteo) do
+    if sorteo.jugado do
+      {sorteo, {:error, "El sorteo ya fue realizado"}}
+    else
+      vendidos =
+        Enum.filter(sorteo.billetes, fn b -> b.vendido end)
+
+      if vendidos == [] do
+        {sorteo, {:error, "No hay billetes vendidos"}}
+      else
+        ganador = Enum.random(vendidos)
+
+        apuesta_ganadora =
+          Enum.find(sorteo.apuestas, fn a -> a.numero == ganador.numero end)
 
         nuevo_sorteo = %{
           sorteo
-          | billetes: nuevos_billetes,
-            apuestas: nuevas_apuestas
+          | jugado: true,
+            ganador: ganador.numero
         }
 
-        {nuevo_sorteo, {:ok, cliente.nombre <> " compró el billete #{numero}"}}
+        mensaje =
+          if apuesta_ganadora do
+            "Número ganador: #{ganador.numero} - Ganador: #{apuesta_ganadora.cliente.nombre}"
+          else
+            "Número ganador: #{ganador.numero}"
+          end
+
+        {nuevo_sorteo, {:ok, mensaje}}
+      end
     end
   end
 end
