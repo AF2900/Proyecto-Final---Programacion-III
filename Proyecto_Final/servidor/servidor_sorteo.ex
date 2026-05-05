@@ -1,16 +1,14 @@
 defmodule ServidorSorteo do
   def iniciar(sorteo) do
-    loop(sorteo)
+    spawn(fn -> loop(sorteo) end)
   end
 
   defp loop(sorteo) do
     receive do
       {:comprar, cliente, numero, pid_cliente, pid_central} ->
         {nuevo_sorteo, respuesta} = vender_billete(sorteo, cliente, numero)
-
         send(pid_cliente, respuesta)
         send(pid_central, {:actualizar_sorteo, nuevo_sorteo})
-
         loop(nuevo_sorteo)
 
       {:obtener_info, pid_cliente} ->
@@ -23,10 +21,8 @@ defmodule ServidorSorteo do
 
       {:realizar_sorteo, pid_cliente, pid_central} ->
         {nuevo_sorteo, resultado} = realizar_sorteo(sorteo)
-
         send(pid_cliente, resultado)
         send(pid_central, {:actualizar_sorteo, nuevo_sorteo})
-
         loop(nuevo_sorteo)
 
       _ ->
@@ -38,9 +34,7 @@ defmodule ServidorSorteo do
     if sorteo.jugado do
       {sorteo, {:error, "El sorteo ya fue realizado"}}
     else
-      billetes = sorteo.billetes
-
-      case Enum.find(billetes, fn b -> b.numero == numero end) do
+      case Enum.find(sorteo.billetes, fn b -> b.numero == numero end) do
         nil ->
           {sorteo, {:error, "Número inválido"}}
 
@@ -51,16 +45,21 @@ defmodule ServidorSorteo do
           nuevo_billete = %{billete | vendido: true}
 
           nuevos_billetes =
-            Enum.map(billetes, fn b ->
+            Enum.map(sorteo.billetes, fn b ->
               if b.numero == numero, do: nuevo_billete, else: b
             end)
 
+          cliente_map = %{
+            nombre: cliente.nombre,
+            edad: cliente.edad
+          }
+
           nueva_apuesta = %{
-            cliente: cliente,
+            cliente: cliente_map,
             numero: numero
           }
 
-          nuevas_apuestas = Map.get(sorteo, :apuestas, []) ++ [nueva_apuesta]
+          nuevas_apuestas = sorteo.apuestas ++ [nueva_apuesta]
 
           nuevo_sorteo = %{
             sorteo
@@ -77,8 +76,7 @@ defmodule ServidorSorteo do
     if sorteo.jugado do
       {sorteo, {:error, "El sorteo ya fue realizado"}}
     else
-      vendidos =
-        Enum.filter(sorteo.billetes, fn b -> b.vendido end)
+      vendidos = Enum.filter(sorteo.billetes, fn b -> b.vendido end)
 
       if vendidos == [] do
         {sorteo, {:error, "No hay billetes vendidos"}}

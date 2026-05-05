@@ -1,5 +1,4 @@
 defmodule Cliente do
-  @derive Jason.Encoder
   defstruct nombre: "", edad: 0
 
   def crear(nombre, edad) do

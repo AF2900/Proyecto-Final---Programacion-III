@@ -1,13 +1,6 @@
-Code.require_file("../modelos/sorteo.ex", __DIR__)
-Code.require_file("servidor_sorteo.ex", __DIR__)
-Code.require_file("../modelos/cliente.ex", __DIR__)
-
 defmodule ServidorCentral do
   @ruta "datos/sorteos.json"
 
-  # =========================
-  # CREAR SORTEO
-  # =========================
   def crear_sorteo do
     nombre = "Ingrese el nombre del sorteo: " |> Util.ingresar(:texto)
     fecha = "Ingrese la fecha: " |> Util.ingresar(:texto)
@@ -24,9 +17,6 @@ defmodule ServidorCentral do
     Util.mostrar_mensaje("Sorteo creado correctamente")
   end
 
-  # =========================
-  # LISTAR SORTEOS
-  # =========================
   def listar_sorteos do
     case File.read(@ruta) do
       {:ok, contenido} ->
@@ -37,7 +27,6 @@ defmodule ServidorCentral do
         else
           Enum.each(lista, fn s ->
             sorteo = s.data
-
             IO.puts("---------------------------")
             IO.puts("Nombre: #{sorteo.nombre}")
             IO.puts("Fecha: #{sorteo.fecha}")
@@ -50,23 +39,6 @@ defmodule ServidorCentral do
     end
   end
 
-  # =========================
-  # GUARDAR
-  # =========================
-  defp guardar_sorteo(sorteo) do
-    lista =
-      case File.read(@ruta) do
-        {:ok, contenido} -> Jason.decode!(contenido, keys: :atoms)
-        _ -> []
-      end
-
-    nueva_lista = [sorteo | lista]
-    File.write!(@ruta, Jason.encode!(nueva_lista, pretty: true))
-  end
-
-  # =========================
-  # COMPRAR BILLETE
-  # =========================
   def comprar_billete do
     case File.read(@ruta) do
       {:ok, contenido} ->
@@ -112,17 +84,83 @@ defmodule ServidorCentral do
     end
   end
 
-  # =========================
-  # INTENTAR COMPRA
-  # =========================
+  def realizar_sorteo do
+    case File.read(@ruta) do
+      {:ok, contenido} ->
+        lista = Jason.decode!(contenido, keys: :atoms)
+
+        if lista == [] do
+          Util.mostrar_mensaje("No hay sorteos")
+        else
+          Enum.with_index(lista)
+          |> Enum.each(fn {s, i} ->
+            IO.puts("#{i + 1}. #{s.data.nombre}")
+          end)
+
+          opcion = "Seleccione sorteo: " |> Util.ingresar(:entero)
+          seleccionado = Enum.at(lista, opcion - 1)
+
+          case seleccionado do
+            nil ->
+              Util.mostrar_error("Opción inválida")
+
+            _ ->
+              sorteo = seleccionado.data
+              nombre_proceso = String.to_atom(sorteo.nombre)
+
+              pid =
+                case Process.whereis(nombre_proceso) do
+                  nil ->
+                    nuevo = ServidorSorteo.iniciar(sorteo)
+                    Process.register(nuevo, nombre_proceso)
+                    nuevo
+
+                  existente ->
+                    existente
+                end
+
+              send(pid, {:realizar_sorteo, self(), self()})
+
+              receive do
+                {:ok, msg} ->
+                  IO.puts(msg)
+
+                  receive do
+                    {:actualizar_sorteo, nuevo_sorteo} ->
+                      actualizar_en_json(nuevo_sorteo)
+                  after
+                    1000 -> :ok
+                  end
+
+                {:error, msg} ->
+                  IO.puts(msg)
+              after
+                2000 ->
+                  IO.puts("Sin respuesta del proceso")
+              end
+          end
+        end
+
+      _ ->
+        Util.mostrar_error("Error")
+    end
+  end
+
   defp intentar_compra(pid, cliente) do
     numero = "Ingrese número de billete: " |> Util.ingresar(:entero)
 
-    send(pid, {:comprar, cliente, numero, self()})
+    send(pid, {:comprar, cliente, numero, self(), self()})
 
     receive do
       {:ok, msg} ->
         IO.puts(msg)
+
+        receive do
+          {:actualizar_sorteo, nuevo_sorteo} ->
+            actualizar_en_json(nuevo_sorteo)
+        after
+          1000 -> :ok
+        end
 
       {:error, msg} ->
         IO.puts(msg)
@@ -133,9 +171,76 @@ defmodule ServidorCentral do
     end
   end
 
-  # =========================
-  # VER DETALLE
-  # =========================
+  defp guardar_sorteo(sorteo) do
+    lista =
+      case File.read(@ruta) do
+        {:ok, contenido} -> Jason.decode!(contenido, keys: :atoms)
+        _ -> []
+      end
+
+    nueva_lista = [sorteo | lista]
+    File.write!(@ruta, Jason.encode!(nueva_lista, pretty: true))
+  end
+
+  def ver_apuestas do
+    case File.read(@ruta) do
+      {:ok, contenido} ->
+        lista = Jason.decode!(contenido, keys: :atoms)
+
+        if lista == [] do
+          Util.mostrar_mensaje("No hay sorteos")
+        else
+          Enum.with_index(lista)
+          |> Enum.each(fn {s, i} ->
+            IO.puts("#{i + 1}. #{s.data.nombre}")
+          end)
+
+          opcion = "Seleccione sorteo: " |> Util.ingresar(:entero)
+          seleccionado = Enum.at(lista, opcion - 1)
+
+          case seleccionado do
+            nil ->
+              Util.mostrar_error("Opción inválida")
+
+            _ ->
+              sorteo = seleccionado.data
+              nombre_proceso = String.to_atom(sorteo.nombre)
+
+              pid =
+                case Process.whereis(nombre_proceso) do
+                  nil ->
+                    nuevo = ServidorSorteo.iniciar(sorteo)
+                    Process.register(nuevo, nombre_proceso)
+                    nuevo
+
+                  existente ->
+                    existente
+                end
+
+              send(pid, {:obtener_apuestas, self()})
+
+              receive do
+                {:apuestas, apuestas} ->
+                  if apuestas == [] do
+                    IO.puts("No hay apuestas registradas")
+                  else
+                    Enum.with_index(apuestas)
+                    |> Enum.each(fn {a, i} ->
+                      IO.puts("#{i + 1}. #{a.cliente.nombre} compró el billete #{a.numero}")
+                    end)
+                  end
+              after
+                2000 ->
+                  IO.puts("No hubo respuesta del proceso")
+              end
+          end
+        end
+
+      _ ->
+        Util.mostrar_error("Error")
+    end
+  end
+
   def ver_detalle_sorteo do
     case File.read(@ruta) do
       {:ok, contenido} ->
@@ -178,9 +283,6 @@ defmodule ServidorCentral do
     end
   end
 
-  # =========================
-  # ACTUALIZAR JSON
-  # =========================
   defp actualizar_en_json(nuevo_sorteo) do
     lista =
       case File.read(@ruta) do
@@ -198,5 +300,54 @@ defmodule ServidorCentral do
       end)
 
     File.write!(@ruta, Jason.encode!(nueva_lista, pretty: true))
+  end
+
+  def eliminar_sorteo do
+    case File.read(@ruta) do
+      {:ok, contenido} ->
+        lista = Jason.decode!(contenido, keys: :atoms)
+
+        if lista == [] do
+          Util.mostrar_mensaje("No hay sorteos")
+        else
+          Enum.with_index(lista)
+          |> Enum.each(fn {s, i} ->
+            IO.puts("#{i + 1}. #{s.data.nombre}")
+          end)
+
+          opcion = "Seleccione sorteo a eliminar: " |> Util.ingresar(:entero)
+          seleccionado = Enum.at(lista, opcion - 1)
+
+          case seleccionado do
+            nil ->
+              Util.mostrar_error("Opción inválida")
+
+            _ ->
+              sorteo = seleccionado.data
+
+              if sorteo.jugado do
+                nueva_lista =
+                  Enum.filter(lista, fn s ->
+                    s.data.nombre != sorteo.nombre
+                  end)
+
+                File.write!(@ruta, Jason.encode!(nueva_lista, pretty: true))
+
+                nombre_proceso = String.to_atom(sorteo.nombre)
+
+                if Process.whereis(nombre_proceso) do
+                  Process.unregister(nombre_proceso)
+                end
+
+                Util.mostrar_mensaje("Sorteo eliminado correctamente")
+              else
+                Util.mostrar_error("Solo se pueden eliminar sorteos finalizados")
+              end
+          end
+        end
+
+      _ ->
+        Util.mostrar_error("Error al leer datos")
+    end
   end
 end

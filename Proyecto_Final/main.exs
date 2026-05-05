@@ -1,6 +1,9 @@
 Mix.install([:jason])
 
 Code.require_file("util.ex", __DIR__)
+Code.require_file("modelos/sorteo.ex", __DIR__)
+Code.require_file("modelos/cliente.ex", __DIR__)
+Code.require_file("servidor/servidor_sorteo.ex", __DIR__)
 Code.require_file("servidor/servidor_central.ex", __DIR__)
 
 defmodule Main do
@@ -16,6 +19,7 @@ defmodule Main do
       4. Comprar billete
       5. Ver apuestas de sorteo
       6. Realizar Sorteo
+      7. Eliminar sorteo
       0. Salir
       =========================
       Ingrese una opción:
@@ -52,6 +56,11 @@ defmodule Main do
 
   def ejecutar_opcion(6) do
     ServidorCentral.realizar_sorteo()
+    main()
+  end
+
+  def ejecutar_opcion(7) do
+    ServidorCentral.eliminar_sorteo()
     main()
   end
 
