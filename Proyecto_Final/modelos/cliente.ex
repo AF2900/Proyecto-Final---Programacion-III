@@ -1,4 +1,5 @@
 defmodule Cliente do
+  @derive Jason.Encoder
   defstruct nombre: "", edad: 0
 
   def crear(nombre, edad) do
@@ -17,6 +18,3 @@ defmodule Cliente do
     crear(nombre, edad)
   end
 end
-
-require Protocol
-Protocol.derive(Jason.Encoder, Cliente)
