@@ -25,6 +25,40 @@ defmodule ServidorSorteo do
         send(pid_central, {:actualizar_sorteo, nuevo_sorteo})
         loop(nuevo_sorteo)
 
+      {:agregar_premio, premio, pid_central} ->
+        nuevo_sorteo = %{
+          sorteo
+          | premios: sorteo.premios ++ [premio]
+        }
+
+        send(pid_central, {:actualizar_sorteo, nuevo_sorteo})
+        send(pid_central, {:premio_agregado, "Premio agregado correctamente"})
+        loop(nuevo_sorteo)
+
+      {:eliminar_premio, indice, pid_central} ->
+        cond do
+          length(sorteo.premios) == 0 ->
+            send(pid_central, {:error, "No hay premios para eliminar"})
+            loop(sorteo)
+
+          indice < 0 or indice >= length(sorteo.premios) ->
+            send(pid_central, {:error, "Índice inválido"})
+            loop(sorteo)
+
+          true ->
+            nuevos_premios =
+              List.delete_at(sorteo.premios, indice)
+
+            nuevo_sorteo = %{
+              sorteo
+              | premios: nuevos_premios
+            }
+
+            send(pid_central, {:actualizar_sorteo, nuevo_sorteo})
+            send(pid_central, {:premio_eliminado, "Premio eliminado correctamente"})
+            loop(nuevo_sorteo)
+        end
+
       _ ->
         loop(sorteo)
     end
@@ -51,7 +85,9 @@ defmodule ServidorSorteo do
 
           cliente_map = %{
             nombre: cliente.nombre,
-            edad: cliente.edad
+            edad: cliente.edad,
+            documento: cliente.documento,
+            tarjeta: cliente.tarjeta
           }
 
           nueva_apuesta = %{
@@ -64,7 +100,8 @@ defmodule ServidorSorteo do
           nuevo_sorteo = %{
             sorteo
             | billetes: nuevos_billetes,
-              apuestas: nuevas_apuestas
+              apuestas: nuevas_apuestas,
+              ingresos: sorteo.ingresos + sorteo.valor_billete
           }
 
           {nuevo_sorteo, {:ok, cliente.nombre <> " compró el billete #{numero}"}}
@@ -83,20 +120,32 @@ defmodule ServidorSorteo do
       else
         ganador = Enum.random(vendidos)
 
+        premio =
+          if sorteo.premios == [] do
+            valor_base = div(sorteo.ingresos, 3)
+            %{nombre: "Premio base", valor: valor_base}
+          else
+            Enum.random(sorteo.premios)
+          end
+
         apuesta_ganadora =
           Enum.find(sorteo.apuestas, fn a -> a.numero == ganador.numero end)
+
+        balance = sorteo.ingresos - premio.valor
 
         nuevo_sorteo = %{
           sorteo
           | jugado: true,
-            ganador: ganador.numero
+            ganador: ganador.numero,
+            premio_ganado: premio,
+            balance: balance
         }
 
         mensaje =
           if apuesta_ganadora do
-            "Número ganador: #{ganador.numero} - Ganador: #{apuesta_ganadora.cliente.nombre}"
+            "Número ganador: #{ganador.numero} - Ganador: #{apuesta_ganadora.cliente.nombre} - Premio: #{premio.nombre} ($#{premio.valor})"
           else
-            "Número ganador: #{ganador.numero}"
+            "Número ganador: #{ganador.numero} - Premio: #{premio.nombre} ($#{premio.valor})"
           end
 
         {nuevo_sorteo, {:ok, mensaje}}

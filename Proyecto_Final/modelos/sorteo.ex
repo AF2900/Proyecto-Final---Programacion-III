@@ -8,7 +8,10 @@ defmodule Sorteo do
       premios: [],
       jugado: false,
       apuestas: [],
-      ganador: nil
+      ganador: nil,
+      premio_ganado: nil,
+      ingresos: 0,
+      balance: 0
     }
   end
 

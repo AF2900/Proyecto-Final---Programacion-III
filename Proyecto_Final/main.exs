@@ -20,6 +20,12 @@ defmodule Main do
       5. Ver apuestas de sorteo
       6. Realizar Sorteo
       7. Eliminar sorteo
+      8. Crear premio
+      9. Listar premios
+      10. Eliminar premio
+      11. Ver historial de sorteo
+      12. Ver clientes ordenados
+      13. Ver resumen de jugadores
       0. Salir
       =========================
       Ingrese una opción:
@@ -64,9 +70,39 @@ defmodule Main do
     main()
   end
 
+  def ejecutar_opcion(8) do
+    ServidorCentral.crear_premio()
+    main()
+  end
+
+  def ejecutar_opcion(9) do
+    ServidorCentral.listar_premios()
+    main()
+  end
+
+  def ejecutar_opcion(10) do
+    ServidorCentral.eliminar_premio()
+    main()
+  end
+
+  def ejecutar_opcion(11) do
+    ServidorCentral.historial_sorteo()
+    main()
+  end
+
+  def ejecutar_opcion(12) do
+    ServidorCentral.clientes_ordenados()
+    main()
+  end
+
+  def ejecutar_opcion(13) do
+    ServidorCentral.resumen_jugadores()
+    main()
+  end
+
   def ejecutar_opcion(0) do
-    "Saliendo del sistema..."
-    |> Util.mostrar_mensaje()
+    Util.mostrar_mensaje("Saliendo del sistema...")
+    :ok
   end
 
   def ejecutar_opcion(_) do

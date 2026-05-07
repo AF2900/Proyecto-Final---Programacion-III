@@ -1,8 +1,14 @@
 defmodule Cliente do
-  defstruct nombre: "", edad: 0
+  defstruct nombre: "", edad: 0, documento: "", contrasena: "", tarjeta: ""
 
-  def crear(nombre, edad) do
-    %Cliente{nombre: nombre, edad: edad}
+  def crear(nombre, edad, documento, contrasena, tarjeta) do
+    %Cliente{
+      nombre: nombre,
+      edad: edad,
+      documento: documento,
+      contrasena: contrasena,
+      tarjeta: tarjeta
+    }
   end
 
   def ingresar do
@@ -14,6 +20,18 @@ defmodule Cliente do
       "Ingrese edad: "
       |> Util.ingresar(:entero)
 
-    crear(nombre, edad)
+    documento =
+      "Ingrese documento: "
+      |> Util.ingresar(:texto)
+
+    contrasena =
+      "Ingrese contraseña: "
+      |> Util.ingresar(:texto)
+
+    tarjeta =
+      "Ingrese tarjeta: "
+      |> Util.ingresar(:texto)
+
+    crear(nombre, edad, documento, contrasena, tarjeta)
   end
 end
