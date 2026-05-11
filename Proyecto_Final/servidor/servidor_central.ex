@@ -1,3 +1,5 @@
+Code.require_file("servidor_sorteo.ex", __DIR__)
+
 defmodule ServidorCentral do
   @moduledoc """
   Servidor Central del sistema de lotería.
