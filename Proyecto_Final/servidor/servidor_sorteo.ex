@@ -5,16 +5,8 @@ defmodule ServidorSorteo do
 
   defp loop(sorteo) do
     receive do
-      # Compra de billete completo
       {:comprar, cliente, numero, pid_cliente, pid_central} ->
         {nuevo_sorteo, respuesta} = vender_billete(sorteo, cliente, numero)
-        send(pid_cliente, respuesta)
-        send(pid_central, {:actualizar_sorteo, nuevo_sorteo})
-        loop(nuevo_sorteo)
-
-      # Compra de fracción de billete
-      {:comprar_fraccion, cliente, numero_billete, numero_fraccion, pid_cliente, pid_central} ->
-        {nuevo_sorteo, respuesta} = vender_fraccion(sorteo, cliente, numero_billete, numero_fraccion)
         send(pid_cliente, respuesta)
         send(pid_central, {:actualizar_sorteo, nuevo_sorteo})
         loop(nuevo_sorteo)
@@ -33,55 +25,83 @@ defmodule ServidorSorteo do
         send(pid_central, {:actualizar_sorteo, nuevo_sorteo})
         loop(nuevo_sorteo)
 
+      {:agregar_premio, premio, pid_central} ->
+        nuevo_sorteo = %{
+          sorteo
+          | premios: sorteo.premios ++ [premio]
+        }
+
+        send(pid_central, {:actualizar_sorteo, nuevo_sorteo})
+        send(pid_central, {:premio_agregado, "Premio agregado correctamente"})
+        loop(nuevo_sorteo)
+
+      {:eliminar_premio, indice, pid_central} ->
+        cond do
+          length(sorteo.premios) == 0 ->
+            send(pid_central, {:error, "No hay premios para eliminar"})
+            loop(sorteo)
+
+          indice < 0 or indice >= length(sorteo.premios) ->
+            send(pid_central, {:error, "Índice inválido"})
+            loop(sorteo)
+
+          true ->
+            nuevos_premios =
+              List.delete_at(sorteo.premios, indice)
+
+            nuevo_sorteo = %{
+              sorteo
+              | premios: nuevos_premios
+            }
+
+            send(pid_central, {:actualizar_sorteo, nuevo_sorteo})
+            send(pid_central, {:premio_eliminado, "Premio eliminado correctamente"})
+            loop(nuevo_sorteo)
+        end
+
       _ ->
         loop(sorteo)
     end
   end
 
-  # ─── Venta de billete completo ────────────────────────────────
   defp vender_billete(sorteo, cliente, numero) do
     if sorteo.jugado do
       {sorteo, {:error, "El sorteo ya fue realizado"}}
     else
       case Enum.find(sorteo.billetes, fn b -> b.numero == numero end) do
         nil ->
-          {sorteo, {:error, "Número de billete inválido"}}
+          {sorteo, {:error, "Número inválido"}}
 
         %{vendido: true} ->
-          {sorteo, {:error, "El billete ##{numero} ya fue vendido completo"}}
+          {sorteo, {:error, "Billete ya vendido"}}
 
         billete ->
-          alguna_vendida = Enum.any?(billete.fracciones, fn f -> f.vendida end)
+          nuevo_billete = %{billete | vendido: true}
 
-          if alguna_vendida do
-            {sorteo, {:error, "El billete ##{numero} tiene fracciones vendidas, no se puede vender completo"}}
-          else
-            fracciones_vendidas = Enum.map(billete.fracciones, fn f -> %{f | vendida: true} end)
-            nuevo_billete = %{billete | vendido: true, fracciones: fracciones_vendidas}
-
-            nuevos_billetes =
-              Enum.map(sorteo.billetes, fn b ->
-                if b.numero == numero, do: nuevo_billete, else: b
-              end)
+          nuevos_billetes =
+            Enum.map(sorteo.billetes, fn b ->
+              if b.numero == numero, do: nuevo_billete, else: b
+            end)
 
           cliente_map = %{
             nombre: cliente.nombre,
-            edad: cliente.edad
+            edad: cliente.edad,
+            documento: cliente.documento,
+            tarjeta: cliente.tarjeta
           }
 
-            nueva_apuesta = %{
-              cliente: cliente_map,
-              numero: numero,
-              tipo: :completo,
-              fraccion: nil
-            }
+          nueva_apuesta = %{
+            cliente: cliente_map,
+            numero: numero
+          }
 
           nuevas_apuestas = sorteo.apuestas ++ [nueva_apuesta]
 
           nuevo_sorteo = %{
             sorteo
             | billetes: nuevos_billetes,
-              apuestas: nuevas_apuestas
+              apuestas: nuevas_apuestas,
+              ingresos: sorteo.ingresos + sorteo.valor_billete
           }
 
           {nuevo_sorteo, {:ok, cliente.nombre <> " compró el billete #{numero}"}}
@@ -89,7 +109,6 @@ defmodule ServidorSorteo do
     end
   end
 
-  # ─── Realizar sorteo ──────────────────────────────────────────
   defp realizar_sorteo(sorteo) do
     if sorteo.jugado do
       {sorteo, {:error, "El sorteo ya fue realizado"}}
@@ -101,83 +120,35 @@ defmodule ServidorSorteo do
       else
         ganador = Enum.random(vendidos)
 
+        premio =
+          if sorteo.premios == [] do
+            valor_base = div(sorteo.ingresos, 3)
+            %{nombre: "Premio base", valor: valor_base}
+          else
+            Enum.random(sorteo.premios)
+          end
+
         apuesta_ganadora =
           Enum.find(sorteo.apuestas, fn a -> a.numero == ganador.numero end)
+
+        balance = sorteo.ingresos - premio.valor
 
         nuevo_sorteo = %{
           sorteo
           | jugado: true,
-            ganador: ganador.numero
+            ganador: ganador.numero,
+            premio_ganado: premio,
+            balance: balance
         }
 
         mensaje =
           if apuesta_ganadora do
-            "Número ganador: #{ganador.numero} - Ganador: #{apuesta_ganadora.cliente.nombre}"
+            "Número ganador: #{ganador.numero} - Ganador: #{apuesta_ganadora.cliente.nombre} - Premio: #{premio.nombre} ($#{premio.valor})"
           else
-            "Número ganador: #{ganador.numero}"
+            "Número ganador: #{ganador.numero} - Premio: #{premio.nombre} ($#{premio.valor})"
           end
 
         {nuevo_sorteo, {:ok, mensaje}}
-      end
-    end
-  end
-
-  # ─── Devolución de compra ─────────────────────────────────────
-  defp devolver_compra(sorteo, nombre_cliente, numero_billete, tipo, numero_fraccion) do
-    if sorteo.jugado do
-      {sorteo, {:error, "No se puede devolver: el sorteo ya fue realizado"}}
-    else
-      tipo_atom = if is_atom(tipo), do: tipo, else: String.to_atom(tipo)
-
-      apuesta_encontrada =
-        Enum.find(sorteo.apuestas, fn a ->
-          nombre_match   = a.cliente.nombre == nombre_cliente
-          numero_match   = a.numero == numero_billete
-          tipo_match     = a.tipo == tipo_atom or to_string(a.tipo) == to_string(tipo_atom)
-          fraccion_match =
-            case tipo_atom do
-              :fraccion -> a.fraccion == numero_fraccion
-              _         -> true
-            end
-          nombre_match and numero_match and tipo_match and fraccion_match
-        end)
-
-      case apuesta_encontrada do
-        nil ->
-          {sorteo, {:error, "No se encontró la compra para devolver"}}
-
-        apuesta ->
-          nuevas_apuestas = List.delete(sorteo.apuestas, apuesta)
-
-          nuevos_billetes =
-            Enum.map(sorteo.billetes, fn b ->
-              if b.numero == numero_billete do
-                case tipo_atom do
-                  :completo ->
-                    fracciones_rest = Enum.map(b.fracciones, fn f -> %{f | vendida: false} end)
-                    %{b | vendido: false, fracciones: fracciones_rest}
-
-                  :fraccion ->
-                    fracciones_rest =
-                      Enum.map(b.fracciones, fn f ->
-                        if f.numero_fraccion == numero_fraccion, do: %{f | vendida: false}, else: f
-                      end)
-                    todas_libres = Enum.all?(fracciones_rest, fn f -> not f.vendida end)
-                    %{b | fracciones: fracciones_rest, vendido: if(todas_libres, do: false, else: b.vendido)}
-
-                  _ -> b
-                end
-              else
-                b
-              end
-            end)
-
-          nuevo_sorteo = %{sorteo | apuestas: nuevas_apuestas, billetes: nuevos_billetes}
-          tipo_str     = if tipo_atom == :completo,
-            do:   "billete completo ##{numero_billete}",
-            else: "fracción ##{numero_fraccion} del billete ##{numero_billete}"
-
-          {nuevo_sorteo, {:ok, "Compra devuelta: #{nombre_cliente} — #{tipo_str}"}}
       end
     end
   end

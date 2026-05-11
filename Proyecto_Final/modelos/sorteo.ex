@@ -1,12 +1,10 @@
 defmodule Sorteo do
-  def crear(nombre, fecha, valor, cantidad_billetes, cantidad_fracciones) do
+  def crear(nombre, fecha, valor, billetes) do
     %{
       nombre: nombre,
       fecha: fecha,
       valor_billete: valor,
-      fracciones: cantidad_fracciones,
-      valor_fraccion: div(valor, cantidad_fracciones),
-      billetes: generar_billetes(cantidad_billetes, cantidad_fracciones),
+      billetes: generar_billetes(billetes),
       premios: [],
       jugado: false,
       apuestas: [],
@@ -17,20 +15,9 @@ defmodule Sorteo do
     }
   end
 
-  defp generar_billetes(cantidad, fracciones) do
+  defp generar_billetes(cantidad) do
     Enum.map(1..cantidad, fn n ->
-      %{
-        numero: n,
-        vendido: false,
-        # Cada fracción tiene su propio estado: libre o vendida
-        fracciones: generar_fracciones(fracciones)
-      }
-    end)
-  end
-
-  defp generar_fracciones(cantidad) do
-    Enum.map(1..cantidad, fn f ->
-      %{numero_fraccion: f, vendida: false}
+      %{numero: n, vendido: false}
     end)
   end
 end
