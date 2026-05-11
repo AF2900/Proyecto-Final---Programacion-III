@@ -1,9 +1,10 @@
 defmodule Apuesta do
-  def crear(numero, tipo, cliente) do
+  def crear(numero, tipo, cliente, fraccion \\ nil) do
     %{
       numero: numero,
       tipo: tipo,
-      cliente: cliente
+      cliente: cliente,
+      fraccion: fraccion
     }
   end
 end
